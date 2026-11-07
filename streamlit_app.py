@@ -103,14 +103,14 @@ with st.sidebar:
     st.markdown("[📖 รับ API Key ฟรีที่ Google AI Studio](https://aistudio.google.com/app/apikey)")
 
 # 3. ส่วนหัวของหน้าเว็บหลัก
-st.markdown('<div class="main-title">🥬 VegCare AI (ผู้ช่วยตรวจโรคพืชและทุเรียนอัจฉริยะ)</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">ตรวจจับโรคพืช วิเคราะห์ความผิดปกติ พร้อมแนะแนวทางการรักษาทั้งแบบอินทรีย์และเคมีปลอดภัย</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">🌍 VegCare AI (ผู้ช่วยตรวจโรคผัก ผลไม้ และพืชทุกชนิดในโลก)</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">ตรวจจับโรคพืช วิเคราะห์ความผิดปกติของผักและผลไม้ทุกชนิด พร้อมเชื่อมต่อคลังความรู้วิชาการและอินเทอร์เน็ต</div>', unsafe_allow_html=True)
 
 # 4. แท็บการใช้งาน (Tabs)
 tab_scan, tab_samples, tab_encyclopedia = st.tabs([
-    "📸 ตรวจสุขภาพพืช/ทุเรียน (Scan)",
+    "📸 ตรวจสุขภาพผักและผลไม้ (Scan)",
     "🍃 ทดสอบภาพตัวอย่าง (Samples)",
-    "📖 สารานุกรมโรคพืช (Encyclopedia)"
+    "📖 สารานุกรมโรคพืชและผลไม้สากล (Encyclopedia)"
 ])
 
 
@@ -202,6 +202,19 @@ def display_diagnosis_report(result):
             <span style="font-size: 0.95rem; color: #374151;">{edibility.get('note_th', '-')}</span>
         </div>
         """, unsafe_allow_html=True)
+
+    # 6. ค้นหาข้อมูลเชิงลึกเพิ่มเติมจากอินเทอร์เน็ต / กรมวิชาการเกษตร
+    search_url = result.get("search_url")
+    search_query = result.get("search_query", "")
+    if search_url:
+        st.markdown("---")
+        st.markdown("#### 🌐 ค้นหาข้อมูลวิชาการเพิ่มเติมจากอินเทอร์เน็ต")
+        st.caption(f"คำสืบค้น: `{search_query}`")
+        st.link_button(
+            label="🔎 เปิดค้นหาวิธีรักษาเพิ่มเติมบน Google & กรมวิชาการเกษตร",
+            url=search_url,
+            use_container_width=True
+        )
 
 
 # ==============================================================

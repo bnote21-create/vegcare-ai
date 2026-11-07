@@ -9,6 +9,7 @@ import io
 import sys
 import json
 import base64
+import urllib.parse
 import numpy as np
 from PIL import Image, ImageStat
 
@@ -31,46 +32,53 @@ raw_env_key = os.environ.get("GEMINI_API_KEY", "").strip()
 # หากเป็น token ชนิดอื่น (เช่น AQ.Ab...) จะไม่ถูกนำมาใช้เป็นค่าเริ่มต้นเพื่อป้องกันข้อผิดพลาด 401
 DEFAULT_API_KEY = raw_env_key if raw_env_key.startswith("AIza") else ""
 
-GEMINI_SYSTEM_PROMPT = """คุณคือผู้เชี่ยวชาญระดับสูงด้านพยาธิวิทยาพืช (Plant Pathologist) และเกษตรกรผู้เชี่ยวชาญด้านพืชผักสวนครัวและไม้ผลเศรษฐกิจ โดยเฉพาะทุเรียน (Durian - รากเน่าโคนเน่า ใบติด แอนแทรคโนส เพลี้ยไก่แจ้), มะเขือเทศ, พริก, แตงกวา, ผักกินใบ ฯลฯ
-งานของคุณคือวิเคราะห์รูปภาพพืช ผัก หรือต้นไม้ผลที่ผู้ใช้ส่งมาอย่างละเอียดและแม่นยำ
+GEMINI_SYSTEM_PROMPT = """คุณคือผู้เชี่ยวชาญระดับโลกด้านพยาธิวิทยาพืช (World Plant Pathologist & Agronomist)
+คุณมีฐานความรู้ครอบคลุม **พืช ผัก ไม้ผล พืชไร่ และสมุนไพรทุกชนิดในโลก (มากกว่า 10,000+ ชนิด)** 
+ไม่ว่าจะเป็น:
+- พืชผักทุกชนิด: ผักสลัดทุกสายพันธุ์ (บัตเตอร์เฮด, กรีนโอ๊ค, คอส), กะหล่ำ, คะน้า, บรอกโคลี, ผักกาด, มะเขือเทศ, พริก, แตงกวา, บวบ, ฟักทอง, ผักบุ้ง, ถั่ว, หอม, กระเทียม, แครอท ฯลฯ
+- ผลไม้ทุกชนิด: ทุเรียน (รากเน่าโคนเน่า, ใบติด, แอนแทรคโนส, เพลี้ย), มะม่วง, ส้ม, มะนาว, มะละกอ, กล้วย, สับปะรด, มังคุด, ลำไย, เงาะ, อะโวคาโด, ฝรั่ง, องุ่น, สตรอว์เบอร์รี, แอปเปิล, เมล่อน ฯลฯ
+- พืชเมืองหนาว เมืองร้อน พืชไร่ และพืชไฮโดรโปนิกส์ทั้งหมดในโลก
+
+งานของคุณคือวิเคราะห์รูปภาพพืช ผัก หรือผลไม้ที่ผู้ใช้ส่งมาอย่างละเอียด ระบุชนิดพืชที่ถูกต้อง และระบุอาการโรค/ศัตรูพืช/การขาดธาตุอาหารอย่างแม่นยำ พร้อมทั้งแนะนำวิธีการรักษาทั้งแบบอินทรีย์ ปลอดสารพิษ และสารเคมีปลอดภัย
 
 จงวิเคราะห์ภาพและตอบกลับมาเป็น JSON ตามรูปแบบที่กำหนดเท่านั้น (ห้ามใส่ Markdown หรือข้อความนอก JSON):
 
 {
   "is_plant_or_vegetable": true,
-  "plant_name": "ชื่อผัก/พืชภาษาไทย (เช่น ทุเรียน, มะเขือเทศ, พริก, ผักกาดขาว, แตงกวา)",
-  "plant_name_en": "ชื่อภาษาอังกฤษ (เช่น Durian, Tomato, Chili, Chinese Cabbage)",
-  "part_analyzed": "ส่วนของพืชที่ตรวจพบ (เช่น ใบ, ยอด, กิ่ง, ลำต้น, โคนต้น, ผล)",
+  "plant_name": "ชื่อผัก/ผลไม้/พืชภาษาไทยที่แม่นยำที่สุด (เช่น ผักสลัดบัตเตอร์เฮด, ทุเรียนหมอนทอง, มะม่วงน้ำดอกไม้, มะนาว, แตงกวา)",
+  "plant_name_en": "ชื่อภาษาอังกฤษและชื่อวิทยาศาสตร์ (เช่น Butterhead Lettuce / Lactuca sativa, Durian / Durio zibethinus)",
+  "part_analyzed": "ส่วนของพืชที่ตรวจพบ (เช่น ใบ, ยอด, กิ่ง, ลำต้น, โคนต้น, ช่อดอก, ผล, ราก)",
   "is_normal": true หรือ false (true ถ้าสุขภาพดี ไม่มีโรค, false ถ้าพบโรค อาการผิดปกติ ขาดสารอาหาร หรือแมลงศัตรูพืช),
   "health_status": "normal" (ถ้าปกติ) หรือ "warning" (ถ้าเป็นโรคเบา-ปานกลาง/ขาดปุ๋ย) หรือ "danger" (ถ้าเป็นโรครุนแรง/เน่า/เชื้อราลุกลาม),
-  "status_label_th": "ข้อความสรุปสถานะ เช่น 'ปกติ สมบูรณ์แข็งแรง' หรือ 'พบความผิดปกติ: โรคใบไหม้'",
+  "status_label_th": "ข้อความสรุปสถานะ เช่น 'ปกติ สมบูรณ์แข็งแรง' หรือ 'พบความผิดปกติ: โรคใบจุดและขอบใบไหม้'",
   "severity": "none" หรือ "mild" หรือ "moderate" หรือ "severe" หรือ "critical",
-  "severity_th": "ไม่มีความผิดปกติ" หรือ "เล็กน้อย" หรือ "ปานกลาง" หรือ "รุนแรง",
-  "confidence": 95.0 (ตัวเลขเปอร์เซ็นต์ความมั่นใจในการวินิจฉัย 70.0 - 99.0),
-  "disease_name_th": "ชื่อโรคหรืออาการผิดปกติภาษาไทย (ถ้าปกติให้ใส่ 'สุขภาพสมบูรณ์แข็งแรง')",
-  "disease_name_en": "ชื่อโรคภาษาอังกฤษ",
+  "severity_th": "ไม่มีความผิดปกติ" หรือ "เล็กน้อย" หรือ "ปานกลาง" หรือ "รุนแรง" หรือ "วิกฤต",
+  "confidence": 96.0 (ตัวเลขเปอร์เซ็นต์ความมั่นใจในการวินิจฉัย 70.0 - 99.0),
+  "disease_name_th": "ชื่อโรคหรืออาการผิดปกติภาษาไทยที่ชัดเจนตามหลักวิชาการ (ถ้าปกติให้ใส่ 'สุขภาพสมบูรณ์แข็งแรง')",
+  "disease_name_en": "ชื่อโรคภาษาอังกฤษและเชื้อสาเหตุ (เช่น Lettuce Anthracnose / Microdochium panattonianum)",
   "symptoms": [
     "รายการอาการผิดปกติที่ตรวจพบจากภาพ เช่น สีใบ, รอยแผล, จุดด่าง, ใบหงิก (บรรยายอย่างละเอียด 3-5 ข้อ)"
   ],
   "causes": [
-    "สาเหตุของการเกิดโรค/ความผิดปกติ เช่น เชื้อรา, ไวรัส, แมลงพาหะ, หรือสภาพแวดล้อม/ขาดปุ๋ย (2-4 ข้อ)"
+    "สาเหตุของการเกิดโรค/ความผิดปกติ เช่น เชื้อรา, แบคทีเรีย, ไวรัส, แมลงพาหะ, หรือสภาพแวดล้อม/ขาดธาตุอาหาร (2-4 ข้อ)"
   ],
   "immediate_actions": [
-    "สิ่งที่ต้องทำทันทีเพื่อหยุดการลุกลาม เช่น ตัดแต่งใบที่เป็นโรคทิ้ง, งดรดน้ำโดนใบ (2-3 ข้อ)"
+    "สิ่งที่ต้องทำทันทีเพื่อหยุดการลุกลาม เช่น ปลิดใบล่างทิ้ง, ถากเปลือกไม้, ลดความชื้น, แยกต้น (2-3 ข้อ)"
   ],
   "organic_treatment": [
-    "วิธีการรักษาแบบอินทรีย์ ปลอดสารพิษ หรือชีวภัณฑ์ เช่น ไตรโคเดอร์มา, เชื้อบีที, น้ำหมักสะเดา, เบกกิ้งโซดา (3-4 ข้อ พร้อมสัดส่วนการผสม)"
+    "วิธีการรักษาแบบอินทรีย์ ปลอดสารพิษ หรือชีวภัณฑ์ เช่น ไตรโคเดอร์มา, เชื้อบีที, บาซิลลัส ซับทิลิส (BS), น้ำหมักสะเดา, เบกกิ้งโซดา (3-4 ข้อ พร้อมสัดส่วนการผสม)"
   ],
   "chemical_treatment": [
     "การรักษาด้วยสารเคมีกำจัดโรค/แมลงที่ปลอดภัย พร้อมระยะปลอดภัยก่อนเก็บเกี่ยว (PHI) (2-3 ข้อ ถ้าไม่จำเป็นให้ระบุว่าไม่ต้องใช้)"
   ],
   "prevention": [
-    "แนวทางการป้องกันระยะยาวและการดูแลบำรุงรักษา เช่น การระบายน้ำ, แสงแดด, การเว้นระยะปลูก (3-4 ข้อ)"
+    "แนวทางการป้องกันระยะยาวและการดูแลบำรุงรักษา เช่น การระบายน้ำ, แสงแดด, การเว้นระยะปลูก, การปรับค่า pH ดิน (3-4 ข้อ)"
   ],
   "edibility": {
     "safe": true หรือ false,
-    "note_th": "คำแนะนำความปลอดภัยในการรับประทานส่วนของพืชนี้ สามารถรับประทานได้หรือไม่ หรือต้องตัดทิ้ง"
-  }
+    "note_th": "คำแนะนำความปลอดภัยในการรับประทาน สามารถรับประทานได้หรือไม่ หรือต้องตัดส่วนใดทิ้ง"
+  },
+  "search_query": "คำค้นหาสำหรับสืบค้นงานวิจัยและคำแนะนำจากกรมวิชาการเกษตรเพิ่มเติมบนอินเทอร์เน็ต เช่น 'วิธีรักษา โรคใบจุดแอนแทรคโนส ใน ผักสลัด กรมวิชาการเกษตร'"
 }
 
 หากภาพที่ส่งมา **ไม่ใช่พืชหรือผัก** เลย ให้ตอบกลับ JSON ดังนี้:
@@ -149,6 +157,10 @@ def analyze_with_gemini(image: Image.Image, api_key: str = None) -> dict:
     data = json.loads(text)
     data["engine"] = "gemini_vision"
     data["model_used"] = "Gemini 2.5 Flash Vision AI"
+    
+    search_q = data.get("search_query") or f"วิธีรักษา {data.get('disease_name_th', '')} ใน {data.get('plant_name', '')} กรมวิชาการเกษตร"
+    data["search_query"] = search_q
+    data["search_url"] = f"https://www.google.com/search?q={urllib.parse.quote(search_q)}"
     return data
 
 
@@ -212,6 +224,14 @@ def analyze_with_expert_rules(image: Image.Image, filename_hint: str = "") -> di
         selected_disease_id = "chili_leaf_curl"
     elif "anthracnose" in fname:
         selected_disease_id = "chili_anthracnose"
+    elif any(k in fname for k in ["citrus", "lime", "lemon", "ส้ม", "มะนาว", "มะกรูด"]):
+        selected_disease_id = "citrus_canker"
+    elif any(k in fname for k in ["mango", "มะม่วง"]):
+        selected_disease_id = "mango_anthracnose"
+    elif any(k in fname for k in ["papaya", "มะละกอ"]):
+        selected_disease_id = "papaya_ringspot"
+    elif any(k in fname for k in ["banana", "กล้วย"]):
+        selected_disease_id = "banana_fusarium"
     elif "rot" in fname or "soft" in fname:
         selected_disease_id = "cabbage_soft_rot"
     elif any(k in fname for k in ["lettuce", "salad", "สลัด", "butterhead", "บัตเตอร์เฮด", "oak", "โอ๊ค", "cos", "คอส", "ผักกาดหอม"]):
@@ -223,34 +243,31 @@ def analyze_with_expert_rules(image: Image.Image, filename_hint: str = "") -> di
     elif "white" in fname or "rust" in fname:
         selected_disease_id = "morning_glory_white_rust"
     elif "healthy" in fname or "normal" in fname:
-        selected_disease_id = "healthy_general"
+        selected_disease_id = "universal_healthy"
 
-    # ถ้าไม่มี hint ให้ใช้อัลกอริทึม Computer Vision วิเคราะห์คุณลักษณะภาพ
+    # ถ้าไม่มี hint ให้ใช้อัลกอริทึม Computer Vision วิเคราะห์คุณลักษณะภาพสากล
     if not selected_disease_id:
         if brown_ratio > 0.03 and green_ratio > 0.30:
-            # พืชใบเขียวมีจุดแผลสีน้ำตาลหรือขอบใบไหม้ (เช่น ผักสลัดบัตเตอร์เฮด / โรคใบจุดแอนแทรคโนส)
+            # พืชใบเขียวมีจุดแผลสีน้ำตาลหรือขอบใบไหม้ (เช่น ผักสลัด / โรคใบจุด)
             selected_disease_id = "lettuce_leaf_spot"
         elif brown_ratio > 0.08 or dark_ratio > 0.12:
-            # มีจุดสีน้ำตาลไหม้กระจายตัวสูง -> โรคใบไหม้ หรือแอนแทรคโนส
-            selected_disease_id = "tomato_blight"
-        elif yellow_ratio > 0.15:
-            # ใบเหลืองเป็นหย่อมๆ หรือซีด -> ใบหงิก/ขาดธาตุอาหาร
-            if brown_ratio > 0.04:
-                selected_disease_id = "cucumber_downy_mildew"
-            else:
-                selected_disease_id = "chili_leaf_curl"
+            # จุดแผลสีน้ำตาลไหม้กระจายตัวสูง -> โรคกลุ่มแอนแทรคโนสหรือใบไหม้สากล
+            selected_disease_id = "universal_anthracnose"
         elif white_ratio > 0.08:
-            # มีคราบขาวหรือตุ่มขาว -> ราสนิมขาว/ราแป้ง
-            selected_disease_id = "morning_glory_white_rust"
+            # มีคราบขาวหรือผงแป้ง -> โรคกลุ่มราแป้งและราน้ำค้างสากล
+            selected_disease_id = "universal_powdery_mildew"
+        elif yellow_ratio > 0.15:
+            # ใบเหลืองเป็นหย่อมๆ ซีด -> ใบหงิก/ขาดธาตุอาหาร
+            selected_disease_id = "chili_leaf_curl" if brown_ratio < 0.04 else "universal_fungal_spot"
         elif dark_ratio > 0.06 and green_ratio > 0.4:
-            # มีรูพรุน รอยกัดแหว่ง -> หนอนเจาะใบ
+            # มีรูพรุน รอยกัดแหว่ง -> หนอนกัดกินใบ
             selected_disease_id = "brassica_caterpillar"
         elif green_ratio > 0.45 and yellow_ratio < 0.06 and brown_ratio < 0.03:
-            # พื้นที่สีเขียวสดใสสูงมาก ไม่มีจุดไหม้ -> พืชปกติ
-            selected_disease_id = "healthy_general"
+            # พื้นที่สีเขียวสดใสสูงมาก ไม่มีจุดไหม้ -> พืชปกติสมบูรณ์
+            selected_disease_id = "universal_healthy"
         else:
-            # พบความผิดปกติทั่วไป หรือขาดธาตุอาหาร
-            selected_disease_id = "nutrient_deficiency"
+            # ความผิดปกติทั่วไป หรือขาดธาตุอาหาร
+            selected_disease_id = "universal_fungal_spot"
 
     disease_info = get_disease_by_id(selected_disease_id)
 
@@ -281,6 +298,8 @@ def analyze_with_expert_rules(image: Image.Image, filename_hint: str = "") -> di
         "edibility": disease_info["edibility"],
         "engine": "offline_expert",
         "model_used": "Local Agricultural Expert Vision Engine (ออฟไลน์)",
+        "search_query": f"วิธีรักษา {disease_info['name_th']} ใน {disease_info['plant_types'][0]} กรมวิชาการเกษตร",
+        "search_url": f"https://www.google.com/search?q={urllib.parse.quote(f'วิธีรักษา {disease_info[\"name_th\"]} ใน {disease_info[\"plant_types\"][0]} กรมวิชาการเกษตร')}",
         "visual_metrics": {
             "green_ratio_pct": round(green_ratio * 100, 1),
             "yellow_ratio_pct": round(yellow_ratio * 100, 1),

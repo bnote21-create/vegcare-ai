@@ -293,6 +293,13 @@ document.addEventListener('DOMContentLoaded', () => {
       edibilityText.textContent = result.edibility.note_th || (result.edibility.safe ? 'สามารถบริโภคได้ปลอดภัย' : 'ไม่ควรบริโภคส่วนที่เป็นโรค');
     }
 
+    // Google Search Button
+    const btnGoogleSearch = document.getElementById('btnGoogleSearch');
+    if (btnGoogleSearch && result.search_url) {
+      btnGoogleSearch.href = result.search_url;
+      btnGoogleSearch.title = result.search_query || 'ค้นหาวิธีรักษาเพิ่มเติมบน Google';
+    }
+
     // Show Results
     resultsContainer.classList.add('show');
     showToast('การวิเคราะห์สำเร็จเรียบร้อยแล้ว!', 'success');
