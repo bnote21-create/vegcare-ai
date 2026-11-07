@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">VegCare AI</string>
+    <!-- Default URL to connect to local server or hosted server -->
+    <string name="default_server_url">http://192.168.1.54:5000</string>
+    <string name="camera_permission_required">กรุณาอนุญาตให้แอปเข้าถึงกล้องถ่ายภาพเพื่อตรวจโรคผัก</string>
+    <string name="loading_text">กำลังโหลด VegCare AI...</string>
+</resources>

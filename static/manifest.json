@@ -1,0 +1,47 @@
+{
+  "name": "VegCare AI - ระบบวิเคราะห์สุขภาพพืชผักและทุเรียน",
+  "short_name": "VegCare AI",
+  "description": "ตรวจจับโรคพืช วิเคราะห์ความผิดปกติของผักสวนครัวและทุเรียน พร้อมให้คำแนะนำการรักษาด้วย AI",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f0fdf4",
+  "theme_color": "#10b981",
+  "categories": ["productivity", "utilities", "education"],
+  "icons": [
+    {
+      "src": "/static/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "ถ่ายภาพผักตรวจโรค",
+      "short_name": "ถ่ายภาพ",
+      "description": "เปิดกล้องเพื่อถ่ายภาพผักตรวจวิเคราะห์ทันที",
+      "url": "/?action=camera",
+      "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "สารานุกรมโรคผัก",
+      "short_name": "สารานุกรม",
+      "description": "ดูข้อมูลโรคและวิธีการรักษาทั้งหมด",
+      "url": "/?action=encyclopedia",
+      "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

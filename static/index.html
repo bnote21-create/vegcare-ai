@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VegCare AI - ระบบวิเคราะห์สุขภาพและโรคผักอัจฉริยะ</title>
+  <!-- PWA & Android Meta Tags -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#10b981">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="/static/css/styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22><text y=%2226%22 font-size=%2226%22>🥬</text></svg>">
+</head>
+<body>
+
+  <div class="container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-icon">🌱</div>
+        <div class="brand-text">
+          <h1>VegCare AI <span class="badge-ai">Vision AI 2.5</span></h1>
+          <p>ระบบตรวจจับโรคพืช ผักสวนครัว และไม้ผลเศรษฐกิจ (ทุเรียน) วิเคราะห์อาการและแนะแนวทางการรักษา</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="btnOpenMobileQR" class="btn btn-primary">
+          <span>📱 ติดตั้งบน Android</span>
+        </button>
+        <button id="btnOpenEncyclopedia" class="btn btn-secondary">
+          <span>📖 สารานุกรมโรคผัก</span>
+        </button>
+        <button id="btnOpenSettings" class="btn btn-secondary btn-icon-only" title="ตั้งค่าระบบ / API Key">
+          <span>⚙️</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Grid -->
+    <div class="main-grid">
+      <!-- Left Column: Upload & Controls -->
+      <aside class="sidebar">
+        <!-- Upload Card -->
+        <div class="card">
+          <div class="card-header">
+            <h2><span>📸</span> นำเข้ารูปภาพผัก</h2>
+          </div>
+          <div class="card-body">
+            <!-- Hidden File Input -->
+            <input type="file" id="fileInput" accept="image/png, image/jpeg, image/jpg, image/webp" style="display: none;">
+
+            <!-- Dropzone -->
+            <div id="dropzone" class="dropzone">
+              <div class="dropzone-icon">🍃</div>
+              <div class="dropzone-text">
+                <h3>ลากรูปภาพมาวางที่นี่</h3>
+                <p>หรือคลิกเพื่อเลือกรูปภาพจากเครื่อง</p>
+              </div>
+            </div>
+
+            <!-- Upload Action Buttons -->
+            <div class="upload-options">
+              <button id="btnChooseFile" class="btn btn-secondary">
+                <span>📁 เลือกไฟล์ภาพ</span>
+              </button>
+              <button id="btnOpenCamera" class="btn btn-primary">
+                <span>📷 ถ่ายรูปด้วยกล้อง</span>
+              </button>
+            </div>
+
+            <!-- Samples Section -->
+            <div class="samples-section">
+              <div class="samples-title">
+                <span>หรือคลิกทดสอบภาพตัวอย่าง</span>
+                <span style="font-size: 0.75rem; color: #10b981;">คลิกแล้วตรวจทันที</span>
+              </div>
+              <div id="samplesGrid" class="samples-grid">
+                <!-- Sample items rendered via JS -->
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Tips Card -->
+        <div class="card">
+          <div class="card-header">
+            <h2><span>💡</span> เทคนิคการถ่ายภาพให้แม่นยำ</h2>
+          </div>
+          <div class="card-body" style="font-size: 0.88rem; color: #475569;">
+            <ul style="padding-left: 1.25rem; line-height: 1.6;">
+              <li>ถ่ายในที่ที่มี<strong>แสงธรรมชาติเพียงพอ</strong> หลีกเลี่ยงแสงสะท้อนจ้า</li>
+              <li>โฟกัสที่<strong>บริเวณใบ ก้าน หรือผลที่มีรอยแผลชัดเจน</strong></li>
+              <li>หากมีรอยโรคใต้ใบ แนะนำให้พลิกใบถ่ายทั้งสองด้าน</li>
+              <li>พยายามให้เห็นขอบใบและเนื้อเยื่อส่วนปกติเพื่อเปรียบเทียบ</li>
+            </ul>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Right Column: Preview & Detailed Diagnosis -->
+      <main class="content-area">
+        <!-- Interactive Preview Box -->
+        <div class="card">
+          <div class="card-header">
+            <h2><span>🔬</span> ผลการวิเคราะห์และวินิจฉัยสุขภาพพืช</h2>
+            <div id="engineBadge" class="meta-badge" style="display: none;">
+              <span>🤖 Gemini Vision AI</span>
+            </div>
+          </div>
+          <div class="card-body">
+            <!-- Image Viewport -->
+            <div id="previewContainer" class="preview-container">
+              <div class="scan-laser" id="scanLaser"></div>
+              <img id="imagePreview" src="/samples/cabbage_healthy.png" alt="Vegetable Preview">
+              <div id="scanningOverlay" class="scanning-overlay">
+                <div class="spinner"></div>
+                <span>AI กำลังวิเคราะห์สุขภาพและโรคของผัก...</span>
+              </div>
+            </div>
+
+            <!-- Notice / Banner (if any) -->
+            <div id="apiNoticeBox" style="display: none; padding: 0.75rem 1rem; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; font-size: 0.86rem; color: #92400e; margin-bottom: 1.25rem; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+              <span id="apiNoticeText"></span>
+              <button id="btnNoticeOpenSettings" class="btn btn-secondary btn-sm" style="font-size: 0.78rem; padding: 0.3rem 0.7rem; background: white; border-color: #fcd34d; color: #b45309; font-weight: 600;">
+                ⚙️ ตั้งค่า API Key
+              </button>
+            </div>
+
+            <!-- Results Detail Area -->
+            <div id="resultsContainer" class="results-container">
+              <!-- Status Banner -->
+              <div id="statusBanner" class="status-banner normal">
+                <div class="status-info">
+                  <div id="statusIcon" class="status-icon">✓</div>
+                  <div class="status-details">
+                    <h2 id="statusTitle">ปกติ สมบูรณ์แข็งแรง</h2>
+                    <p id="statusSubtitle">ไม่พบอาการผิดปกติหรือโรคพืชในตัวอย่าง</p>
+                  </div>
+                </div>
+                <div class="confidence-box">
+                  <div id="confidenceVal" class="confidence-val">96.5%</div>
+                  <div class="confidence-label">ความมั่นใจการวินิจฉัย</div>
+                </div>
+              </div>
+
+              <!-- Metadata Badges -->
+              <div class="meta-badges">
+                <div class="meta-badge">
+                  <span>🥬 ชนิดผัก:</span>
+                  <strong id="badgePlantName">ผักกาดขาว</strong>
+                </div>
+                <div class="meta-badge">
+                  <span>🌿 ส่วนที่ตรวจ:</span>
+                  <strong id="badgePart">ใบ / ส่วนยอด</strong>
+                </div>
+                <div class="meta-badge">
+                  <span>⚠️ ระดับความรุนแรง:</span>
+                  <strong id="badgeSeverity">ไม่มีความผิดปกติ</strong>
+                </div>
+              </div>
+
+              <!-- Section 1: Symptoms Detected -->
+              <div class="detail-card">
+                <div class="detail-header">
+                  <span>🔍</span> อาการผิดปกติที่ตรวจพบ (Symptoms Detected)
+                </div>
+                <div class="detail-body">
+                  <ul id="symptomsList" class="detail-list">
+                    <li>ใบมีสีเขียวสดใส สม่ำเสมอ ไม่พบการหงิกงอหรือรอยไหม้</li>
+                  </ul>
+                </div>
+              </div>
+
+              <!-- Section 2: Underlying Causes -->
+              <div class="detail-card">
+                <div class="detail-header">
+                  <span>🧬</span> สาเหตุและปัจจัยกระตุ้น (Causes & Risk Factors)
+                </div>
+                <div class="detail-body">
+                  <ul id="causesList" class="detail-list">
+                    <li>พืชได้รับน้ำ แสงแดด และธาตุอาหารสมบูรณ์</li>
+                  </ul>
+                </div>
+              </div>
+
+              <!-- Section 3: Immediate Actions -->
+              <div class="detail-card">
+                <div class="detail-header urgent">
+                  <span>⚡</span> มาตรการเร่งด่วนที่ต้องทำทันที (Immediate Actions)
+                </div>
+                <div class="detail-body">
+                  <ul id="immediateList" class="detail-list urgent">
+                    <li>ดูแลให้น้ำและแสงแดดสม่ำเสมอเช่นเดิม</li>
+                  </ul>
+                </div>
+              </div>
+
+              <!-- Section 4: Organic / Bio Solutions -->
+              <div class="detail-card">
+                <div class="detail-header organic">
+                  <span>🌿</span> การรักษาแบบอินทรีย์ / ชีวภัณฑ์ปลอดสารเคมี (Organic Solutions)
+                </div>
+                <div class="detail-body">
+                  <ul id="organicList" class="detail-list organic">
+                    <li>ฉีดพ่นน้ำหมักจุลินทรีย์สังเคราะห์แสง (PSB) ทุก 7-10 วัน เพื่อส่งเสริมการเจริญเติบโต</li>
+                  </ul>
+                </div>
+              </div>
+
+              <!-- Section 5: Chemical Solutions -->
+              <div class="detail-card">
+                <div class="detail-header chemical">
+                  <span>🧪</span> การรักษาด้วยสารควบคุมโรคพืชและข้อควรระวัง (Chemical Treatments)
+                </div>
+                <div class="detail-body">
+                  <ul id="chemicalList" class="detail-list chemical">
+                    <li>ไม่มีความจำเป็นต้องใช้สารเคมีในระยะนี้</li>
+                  </ul>
+                </div>
+              </div>
+
+              <!-- Section 6: Prevention & Care -->
+              <div class="detail-card">
+                <div class="detail-header">
+                  <span>🛡️</span> การป้องกันระยะยาวและการดูแลบำรุงรักษา (Long-term Prevention)
+                </div>
+                <div class="detail-body">
+                  <ul id="preventionList" class="detail-list">
+                    <li>รดน้ำที่โคนต้น หลีกเลี่ยงการรดน้ำโดนใบช่วงค่ำ</li>
+                  </ul>
+                </div>
+              </div>
+
+              <!-- Section 7: Edibility Note -->
+              <div id="edibilityBox" class="edibility-callout safe">
+                <div class="edibility-icon">🥗</div>
+                <div>
+                  <strong>คำแนะนำด้านการบริโภค:</strong>
+                  <div id="edibilityText" style="font-size: 0.92rem; margin-top: 2px;">
+                    ปลอดภัย 100% สามารถเก็บเกี่ยวและรับประทานได้ทันที เพียงล้างน้ำสะอาดก่อนนำไปประกอบอาหาร
+                  </div>
+                </div>
+              </div>
+
+              <!-- Action Toolbar -->
+              <div class="action-toolbar">
+                <button id="btnSpeak" class="btn btn-secondary">
+                  <span>🔊 ฟังเสียงบรรยายผล</span>
+                </button>
+                <button id="btnPrint" class="btn btn-secondary">
+                  <span>🖨️ พิมพ์รายงาน / บันทึก PDF</span>
+                </button>
+                <button id="btnCopyReport" class="btn btn-secondary">
+                  <span>📋 คัดลอกข้อความสรุป</span>
+                </button>
+                <button id="btnReset" class="btn btn-primary">
+                  <span>🔄 ตรวจภาพใหม่</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Camera Modal -->
+  <div id="cameraModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3><span>📷</span> ถ่ายรูปผักจากกล้อง</h3>
+        <button id="btnCloseCamera" class="btn btn-secondary btn-sm">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="camera-box">
+          <video id="cameraVideo" autoplay playsinline></video>
+        </div>
+        <p style="text-align: center; font-size: 0.85rem; color: #64748b; margin-top: 0.5rem;">
+          จัดวางส่วนใบหรือจุดที่เป็นโรคให้อยู่ตรงกลางภาพ แล้วกดปุ่มถ่ายภาพ
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button id="btnSwitchCamera" class="btn btn-secondary">
+          <span>🔄 สลับกล้อง</span>
+        </button>
+        <button id="btnSnapPhoto" class="btn btn-primary">
+          <span>📸 ถ่ายภาพและวิเคราะห์</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Encyclopedia Modal -->
+  <div id="encyclopediaModal" class="modal">
+    <div class="modal-content" style="max-width: 800px;">
+      <div class="modal-header">
+        <h3><span>📖</span> คลังสารานุกรมโรคผักสวนครัวและพืชเศรษฐกิจ</h3>
+        <button id="btnCloseEncyclopedia" class="btn btn-secondary btn-sm">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="text" id="encyclopediaSearch" class="form-input" placeholder="🔍 ค้นหาชื่อโรค, ชื่อผัก (เช่น มะเขือเทศ, พริก, ราน้ำค้าง, หนอน)..." style="margin-bottom: 1rem;">
+        <div id="encyclopediaList">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="btnCloseEncyclopediaFooter" class="btn btn-secondary">ปิด</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3><span>⚙️</span> การตั้งค่าระบบ VegCare AI</h3>
+        <button id="btnCloseSettings" class="btn btn-secondary btn-sm">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 0.85rem; margin-bottom: 1.25rem; font-size: 0.85rem; color: #166534;">
+          <strong>🌱 วิธีรับ Google Gemini API Key ฟรี:</strong>
+          <ol style="margin-left: 1.25rem; margin-top: 0.4rem; line-height: 1.6;">
+            <li>เข้าไปที่ <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: #059669; font-weight: 600; text-decoration: underline;">Google AI Studio (Get API Key)</a></li>
+            <li>กดปุ่ม <strong>Create API Key</strong></li>
+            <li>คัดลอกคีย์ที่ขึ้นต้นด้วย <code>AIzaSy...</code> แล้วนำมาวางที่ช่องด้านล่าง</li>
+          </ol>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="apiKeyInput">Google Gemini API Key (อุปกรณ์เสริม)</label>
+          <input type="password" id="apiKeyInput" class="form-input" placeholder="AIzaSy...">
+          <div class="form-help">
+            ระบบรองรับทั้ง Gemini 2.5 Flash และโหมด Local Agricultural Vision Engine ออฟไลน์ (ทำงานได้ทันทีแม้ไม่มี Key)
+          </div>
+        </div>
+        <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+          <button id="btnTestKey" class="btn btn-secondary btn-sm">
+            <span>🧪 ทดสอบการเชื่อมต่อ API Key</span>
+          </button>
+          <button id="btnClearKey" class="btn btn-secondary btn-sm">
+            <span>ล้าง Key</span>
+          </button>
+        </div>
+        <div id="keyTestResult" style="display: none; padding: 0.6rem 0.8rem; border-radius: 6px; font-size: 0.85rem;"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="btnSaveSettings" class="btn btn-primary">บันทึกการตั้งค่า</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Android Mobile Modal -->
+  <div id="mobileModal" class="modal">
+    <div class="modal-content" style="max-width: 550px;">
+      <div class="modal-header">
+        <h3><span>📱</span> ติดตั้งแอป VegCare AI บน Android</h3>
+        <button id="btnCloseMobileModal" class="btn btn-secondary btn-sm">✕</button>
+      </div>
+      <div class="modal-body" style="text-align: center;">
+        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 1.25rem; margin-bottom: 1.25rem;">
+          <p style="font-weight: 600; color: #064e3b; margin-bottom: 0.5rem; font-size: 1.05rem;">
+            สแกน QR Code ด้วยกล้องมือถือ Android
+          </p>
+          <div style="display: flex; justify-content: center; margin: 0.75rem 0;">
+            <img id="qrCodeImg" src="/api/qrcode" alt="QR Code" style="width: 190px; height: 190px; border-radius: 10px; border: 2px solid #a7f3d0; background: white; padding: 6px;">
+          </div>
+          <p style="font-size: 0.88rem; color: #047857; margin-bottom: 0.25rem;">หรือเปิดเบราว์เซอร์ Chrome บนมือถือไปที่:</p>
+          <div id="mobileUrlDisplay" style="font-family: monospace; font-size: 1.1rem; font-weight: bold; background: white; padding: 0.4rem 0.8rem; border-radius: 6px; display: inline-block; color: #065f46; border: 1px dashed #6ee7b7; user-select: all;">
+            http://192.168.1.54:5000
+          </div>
+        </div>
+
+        <div style="text-align: left; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1rem; font-size: 0.88rem; color: #334155; line-height: 1.6;">
+          <strong>📲 วิธีติดตั้งลงบนหน้าจอหลักมือถือ (Home Screen):</strong>
+          <ol style="margin-left: 1.25rem; margin-top: 0.4rem;">
+            <li>ตรวจสอบว่ามือถือเชื่อมต่อ <strong>Wi-Fi วงเดียวกับคอมพิวเตอร์</strong></li>
+            <li>ใช้กล้องมือถือสแกน QR Code หรือพิมพ์ URL ใน <strong>Google Chrome</strong></li>
+            <li>จะมีหน้าต่างขึ้นถาม <strong>"ติดตั้งแอป (Install App)"</strong> หรือแตะเมนูจุด 3 จุด (⋮) ด้านขวาบนของ Chrome แล้วเลือก <strong>"เพิ่มลงในหน้าจอหลัก (Add to Home screen)"</strong></li>
+            <li>แอปจะมีไอคอน 🥬 VegCare AI บนหน้าจอหลัก สามารถเปิดใช้งานแบบเต็มจอและถ่ายรูปผักได้ทันที!</li>
+          </ol>
+        </div>
+
+        <!-- Android Studio Project Note -->
+        <div style="margin-top: 1rem; text-align: left; font-size: 0.82rem; color: #64748b; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.75rem;">
+          📦 <strong>สำหรับนักพัฒนา:</strong> ซอร์สโค้ดโปรเจกต์เนทีฟ Android Studio (WebView + Camera Intent) ถูกเตรียมไว้ให้แล้วที่โฟลเดอร์ <code>Vegapp/android/</code> สามารถเปิดด้วย Android Studio แล้วกด Build APK ได้ทันที
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="btnNativeInstallPrompt" class="btn btn-primary" style="display: none;">
+          <span>📲 ติดตั้งลงในอุปกรณ์นี้ทันที</span>
+        </button>
+        <button id="btnCloseMobileModalFooter" class="btn btn-secondary">ปิด</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast">
+    <span id="toastIcon">✓</span>
+    <span id="toastMsg">ข้อความแจ้งเตือน</span>
+  </div>
+
+  <!-- JavaScript -->
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
