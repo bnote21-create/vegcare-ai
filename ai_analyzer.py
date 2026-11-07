@@ -214,6 +214,8 @@ def analyze_with_expert_rules(image: Image.Image, filename_hint: str = "") -> di
         selected_disease_id = "chili_anthracnose"
     elif "rot" in fname or "soft" in fname:
         selected_disease_id = "cabbage_soft_rot"
+    elif any(k in fname for k in ["lettuce", "salad", "สลัด", "butterhead", "บัตเตอร์เฮด", "oak", "โอ๊ค", "cos", "คอส", "ผักกาดหอม"]):
+        selected_disease_id = "lettuce_leaf_spot"
     elif "downy" in fname or "cucumber" in fname or "mildew" in fname:
         selected_disease_id = "cucumber_downy_mildew"
     elif "caterpillar" in fname or "kale" in fname or "worm" in fname:
@@ -225,7 +227,10 @@ def analyze_with_expert_rules(image: Image.Image, filename_hint: str = "") -> di
 
     # ถ้าไม่มี hint ให้ใช้อัลกอริทึม Computer Vision วิเคราะห์คุณลักษณะภาพ
     if not selected_disease_id:
-        if brown_ratio > 0.08 or dark_ratio > 0.12:
+        if brown_ratio > 0.03 and green_ratio > 0.30:
+            # พืชใบเขียวมีจุดแผลสีน้ำตาลหรือขอบใบไหม้ (เช่น ผักสลัดบัตเตอร์เฮด / โรคใบจุดแอนแทรคโนส)
+            selected_disease_id = "lettuce_leaf_spot"
+        elif brown_ratio > 0.08 or dark_ratio > 0.12:
             # มีจุดสีน้ำตาลไหม้กระจายตัวสูง -> โรคใบไหม้ หรือแอนแทรคโนส
             selected_disease_id = "tomato_blight"
         elif yellow_ratio > 0.15:
