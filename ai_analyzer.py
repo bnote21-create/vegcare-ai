@@ -27,15 +27,92 @@ try:
 except Exception:
     pass
 
-raw_env_key = os.environ.get("GEMINI_API_KEY", "").strip()
-# ตรวจสอบเบื้องต้น: Google AI Studio Gemini API Key ปกติจะขึ้นต้นด้วย 'AIza'
-# หากเป็น token ชนิดอื่น (เช่น AQ.Ab...) จะไม่ถูกนำมาใช้เป็นค่าเริ่มต้นเพื่อป้องกันข้อผิดพลาด 401
-DEFAULT_API_KEY = raw_env_key if raw_env_key.startswith("AIza") else ""
+
+def get_effective_api_key(passed_key: str = None) -> str:
+    """
+    ดึง Google Gemini API Key จากแหล่งต่างๆ ตามลำดับ:
+    1. passed_key ที่ส่งเข้ามาจากการกรอก
+    2. Streamlit Cloud Secrets (st.secrets["GEMINI_API_KEY"])
+    3. Streamlit Session State (st.session_state["api_key"])
+    4. Streamlit Query Params (st.query_params["key"])
+    5. แคชไฟล์ในเครื่อง (.api_key_cache)
+    6. Environment variable (GEMINI_API_KEY)
+    """
+    # 1. คีย์ที่ส่งเข้ามาตรงๆ
+    if passed_key and str(passed_key).strip():
+        k = str(passed_key).strip().strip("'\"")
+        if k.startswith("AIza"):
+            return k
+
+    # 2 - 4. ตรวจสอบใน Streamlit
+    try:
+        import streamlit as st
+        # Secrets บน Streamlit Cloud
+        if hasattr(st, "secrets"):
+            sec = st.secrets.get("GEMINI_API_KEY") or st.secrets.get("gemini_api_key")
+            if sec and str(sec).strip():
+                k = str(sec).strip().strip("'\"")
+                if k.startswith("AIza"):
+                    return k
+
+        # Session State
+        if hasattr(st, "session_state"):
+            s_key = st.session_state.get("api_key")
+            if s_key and str(s_key).strip():
+                k = str(s_key).strip().strip("'\"")
+                if k.startswith("AIza"):
+                    return k
+
+        # Query Params (เก็บใน URL เพื่อป้องกันรีเฟรชแล้วหลุด)
+        if hasattr(st, "query_params"):
+            q_key = st.query_params.get("key")
+            if q_key and str(q_key).strip():
+                k = str(q_key).strip().strip("'\"")
+                if k.startswith("AIza"):
+                    return k
+    except Exception:
+        pass
+
+    # 5. แคชไฟล์ (.api_key_cache)
+    cache_path = os.path.join(current_dir, ".api_key_cache")
+    if os.path.exists(cache_path):
+        try:
+            with open(cache_path, "r", encoding="utf-8") as f:
+                c_key = f.read().strip().strip("'\"")
+                if c_key.startswith("AIza"):
+                    return c_key
+        except Exception:
+            pass
+
+    # 6. Environment variable
+    env_key = os.environ.get("GEMINI_API_KEY", "").strip().strip("'\"")
+    if env_key and env_key.startswith("AIza"):
+        return env_key
+
+    return ""
+
+
+def save_cached_api_key(api_key: str) -> bool:
+    """บันทึก API Key ลงแคชไฟล์เพื่อความคงทน"""
+    k = api_key.strip().strip("'\"")
+    if not k.startswith("AIza"):
+        return False
+    try:
+        cache_path = os.path.join(current_dir, ".api_key_cache")
+        with open(cache_path, "w", encoding="utf-8") as f:
+            f.write(k)
+        return True
+    except Exception:
+        return False
+
+
+# ค่าเริ่มต้นสำหรับการใช้งาน
+DEFAULT_API_KEY = get_effective_api_key()
 
 GEMINI_SYSTEM_PROMPT = """คุณคือผู้เชี่ยวชาญระดับโลกด้านพยาธิวิทยาพืช (World Plant Pathologist & Agronomist)
 คุณมีฐานความรู้ครอบคลุม **พืช ผัก ไม้ผล พืชไร่ และสมุนไพรทุกชนิดในโลก (มากกว่า 10,000+ ชนิด)** 
 ไม่ว่าจะเป็น:
-- พืชผักทุกชนิด: ผักสลัดทุกสายพันธุ์ (บัตเตอร์เฮด, กรีนโอ๊ค, คอส), กะหล่ำ, คะน้า, บรอกโคลี, ผักกาด, มะเขือเทศ, พริก, แตงกวา, บวบ, ฟักทอง, ผักบุ้ง, ถั่ว, หอม, กระเทียม, แครอท ฯลฯ
+- พืชผักทุกชนิด: ผักสลัดทุกสายพันธุ์ (บัตเตอร์เฮด, กรีนโอ๊ค, เรดโอ๊ค, คอส, ผักกาดหอม), กะหล่ำ, คะน้า, บรอกโคลี, ผักกาด, มะเขือเทศ, พริก, แตงกวา, บวบ, ฟักทอง, ผักบุ้ง, ถั่ว, หอม, กระเทียม, แครอท ฯลฯ
 - ผลไม้ทุกชนิด: ทุเรียน (รากเน่าโคนเน่า, ใบติด, แอนแทรคโนส, เพลี้ย), มะม่วง, ส้ม, มะนาว, มะละกอ, กล้วย, สับปะรด, มังคุด, ลำไย, เงาะ, อะโวคาโด, ฝรั่ง, องุ่น, สตรอว์เบอร์รี, แอปเปิล, เมล่อน ฯลฯ
 - พืชเมืองหนาว เมืองร้อน พืชไร่ และพืชไฮโดรโปนิกส์ทั้งหมดในโลก
 
@@ -109,19 +186,17 @@ GEMINI_SYSTEM_PROMPT = """คุณคือผู้เชี่ยวชาญ
 """
 
 
-def analyze_with_gemini(image: Image.Image, api_key: str = None) -> dict:
+def analyze_with_gemini(image: Image.Image, api_key: str = None, plant_hint: str = "") -> dict:
     """เรียกใช้ Gemini Vision เพื่อวิเคราะห์ภาพผัก"""
-    effective_key = (api_key or DEFAULT_API_KEY).strip()
+    effective_key = get_effective_api_key(api_key)
     if not effective_key:
-        raise ValueError("ไม่พบ Gemini API Key กรุณาระบุ API Key ในการตั้งค่าหรือใน .env")
+        raise ValueError("ไม่พบ Gemini API Key กรุณาระบุ API Key ในการตั้งค่าหรือใน Streamlit Secrets")
 
     from google import genai
     from google.genai import types
 
-    # กำหนด client ด้วย API key
     client = genai.Client(api_key=effective_key)
 
-    # แปลง PIL Image เป็น bytes
     buf = io.BytesIO()
     image.save(buf, format="JPEG", quality=90)
     image_bytes = buf.getvalue()
@@ -131,12 +206,16 @@ def analyze_with_gemini(image: Image.Image, api_key: str = None) -> dict:
         mime_type="image/jpeg",
     )
 
+    user_prompt = "โปรดตรวจสอบภาพพืช/ผักนี้อย่างละเอียด ระบุชนิดพืชที่ถูกต้อง และตอบกลับเป็น JSON ตามรูปแบบที่กำหนดเท่านั้น"
+    if plant_hint and "อัตโนมัติ" not in plant_hint:
+        user_prompt += f"\n(หมายเหตุจากผู้ใช้: ภาพนี้เป็น {plant_hint} โปรดนำข้อมูลนี้ไปช่วยประกอบการวิเคราะห์รอยโรค)"
+
     response = client.models.generate_content(
         model="gemini-2.5-flash",
         contents=[
             GEMINI_SYSTEM_PROMPT,
             image_part,
-            "โปรดตรวจสอบภาพผักนี้อย่างละเอียด และตอบกลับเป็น JSON ตามรูปแบบที่กำหนดเท่านั้น"
+            user_prompt
         ],
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
@@ -145,7 +224,6 @@ def analyze_with_gemini(image: Image.Image, api_key: str = None) -> dict:
     )
 
     text = response.text.strip()
-    # ดึงเฉพาะ JSON หากมี code fence
     if text.startswith("```json"):
         text = text[7:]
     if text.startswith("```"):
@@ -160,17 +238,16 @@ def analyze_with_gemini(image: Image.Image, api_key: str = None) -> dict:
     
     search_q = data.get("search_query") or f"วิธีรักษา {data.get('disease_name_th', '')} ใน {data.get('plant_name', '')} กรมวิชาการเกษตร"
     data["search_query"] = search_q
-    data["search_url"] = f"https://www.google.com/search?q={urllib.parse.quote(search_q)}"
+    data["search_url"] = "https://www.google.com/search?q=" + urllib.parse.quote(search_q)
     return data
 
 
-def analyze_with_expert_rules(image: Image.Image, filename_hint: str = "") -> dict:
+def analyze_with_expert_rules(image: Image.Image, filename_hint: str = "", plant_hint: str = "") -> dict:
     """
     ระบบวิเคราะห์อัจฉริยะแบบ Local Expert Rule-based (ทำงานแบบออฟไลน์)
     ใช้คอมพิวเตอร์วิชั่นวิเคราะห์สี พื้นผิว แผลจุดใบไหม้ และอาการผิดปกติของใบผัก
     """
     img_rgb = image.convert("RGB")
-    # ปรับขนาดเพื่อคำนวณสถิติ
     img_small = img_rgb.resize((256, 256))
     np_img = np.array(img_small, dtype=np.float32)
 
@@ -178,22 +255,21 @@ def analyze_with_expert_rules(image: Image.Image, filename_hint: str = "") -> di
     g = np_img[:, :, 1]
     b = np_img[:, :, 2]
 
-    # คำนวณดัชนีสี
     total_pixels = 256 * 256
     
-    # 1. พิกเซลสีเขียวสด (Healthy Green: G สูงกว่า R และ B อย่างมีนัยสำคัญ)
+    # 1. พิกเซลสีเขียวสด (Healthy Green)
     green_mask = (g > r * 1.08) & (g > b * 1.08) & (g > 45)
     green_ratio = np.sum(green_mask) / total_pixels
 
-    # 2. พิกเซลสีเหลือง/ซีด (Chlorosis / Yellowing: R และ G สูง แต่ B ต่ำ)
+    # 2. พิกเซลสีเหลือง/ซีด (Chlorosis / Yellowing)
     yellow_mask = (r > 120) & (g > 110) & (b < 110) & (np.abs(r - g) < 60)
     yellow_ratio = np.sum(yellow_mask) / total_pixels
 
-    # 3. พิกเซลสีน้ำตาล/จุดไหม้ (Necrosis / Brown Blight spots: R > G > B หรือสีคล้ำไหม้)
+    # 3. พิกเซลสีน้ำตาล/จุดไหม้ (Necrosis / Brown Blight spots)
     brown_mask = (r > 60) & (g > 30) & (b < 60) & (r > g * 1.15) & (r < 180)
     brown_ratio = np.sum(brown_mask) / total_pixels
 
-    # 4. พิกเซลสีขาว/คราบราขาว (Mildew / White Rust: R, G, B สูงใกล้เคียงกัน)
+    # 4. พิกเซลสีขาว/คราบราขาว (Mildew / White Rust)
     white_mask = (r > 180) & (g > 180) & (b > 180)
     white_ratio = np.sum(white_mask) / total_pixels
 
@@ -201,79 +277,73 @@ def analyze_with_expert_rules(image: Image.Image, filename_hint: str = "") -> di
     dark_mask = (r < 40) & (g < 40) & (b < 40)
     dark_ratio = np.sum(dark_mask) / total_pixels
 
-    # ตรวจสอบ hint จากชื่อไฟล์ตัวอย่าง (ถ้ามี)
-    fname = filename_hint.lower()
+    # รวมข้อความ hint ทั้งหมด
+    all_hint = f"{filename_hint} {plant_hint}".lower()
     selected_disease_id = None
 
-    if "durian" in fname or "ทุเรียน" in fname:
-        if "phytophthora" in fname or "rot" in fname or "canker" in fname or "ยางไหล" in fname:
+    # ตรวจสอบจาก hint เจาะจง
+    if any(k in all_hint for k in ["lettuce", "salad", "สลัด", "butterhead", "บัตเตอร์เฮด", "oak", "โอ๊ค", "cos", "คอส", "ผักกาดหอม"]):
+        selected_disease_id = "lettuce_leaf_spot" if (brown_ratio > 0.02 or yellow_ratio > 0.10) else "healthy_general"
+    elif "durian" in all_hint or "ทุเรียน" in all_hint:
+        if any(k in all_hint for k in ["phytophthora", "rot", "canker", "ยางไหล"]):
             selected_disease_id = "durian_phytophthora"
-        elif "rhizoctonia" in fname or "leaf_blight" in fname or "ใบติด" in fname:
+        elif any(k in all_hint for k in ["rhizoctonia", "leaf_blight", "ใบติด"]):
             selected_disease_id = "durian_rhizoctonia"
-        elif "anthracnose" in fname or "ใบจุด" in fname or "สนิม" in fname:
+        elif any(k in all_hint for k in ["anthracnose", "ใบจุด", "สนิม"]):
             selected_disease_id = "durian_anthracnose"
-        elif "psyllid" in fname or "mite" in fname or "เพลี้ย" in fname:
+        elif any(k in all_hint for k in ["psyllid", "mite", "เพลี้ย"]):
             selected_disease_id = "durian_psyllid"
-        elif "healthy" in fname or "normal" in fname:
+        elif "healthy" in all_hint or "normal" in all_hint:
             selected_disease_id = "durian_healthy"
         else:
             selected_disease_id = "durian_phytophthora" if brown_ratio > 0.05 else "durian_healthy"
-    elif "blight" in fname or "tomato" in fname:
+    elif any(k in all_hint for k in ["tomato", "มะเขือเทศ", "blight"]):
         selected_disease_id = "tomato_blight"
-    elif "curl" in fname or "thrips" in fname or "chili" in fname:
+    elif any(k in all_hint for k in ["chili", "พริก", "curl"]):
         selected_disease_id = "chili_leaf_curl"
-    elif "anthracnose" in fname:
-        selected_disease_id = "chili_anthracnose"
-    elif any(k in fname for k in ["citrus", "lime", "lemon", "ส้ม", "มะนาว", "มะกรูด"]):
+    elif any(k in all_hint for k in ["citrus", "lime", "lemon", "ส้ม", "มะนาว", "มะกรูด"]):
         selected_disease_id = "citrus_canker"
-    elif any(k in fname for k in ["mango", "มะม่วง"]):
+    elif any(k in all_hint for k in ["mango", "มะม่วง"]):
         selected_disease_id = "mango_anthracnose"
-    elif any(k in fname for k in ["papaya", "มะละกอ"]):
+    elif any(k in all_hint for k in ["papaya", "มะละกอ"]):
         selected_disease_id = "papaya_ringspot"
-    elif any(k in fname for k in ["banana", "กล้วย"]):
+    elif any(k in all_hint for k in ["banana", "กล้วย"]):
         selected_disease_id = "banana_fusarium"
-    elif "rot" in fname or "soft" in fname:
-        selected_disease_id = "cabbage_soft_rot"
-    elif any(k in fname for k in ["lettuce", "salad", "สลัด", "butterhead", "บัตเตอร์เฮด", "oak", "โอ๊ค", "cos", "คอส", "ผักกาดหอม"]):
-        selected_disease_id = "lettuce_leaf_spot"
-    elif "downy" in fname or "cucumber" in fname or "mildew" in fname:
+    elif any(k in all_hint for k in ["แตงกวา", "แตง", "cucumber", "downy", "melon", "เมล่อน"]):
         selected_disease_id = "cucumber_downy_mildew"
-    elif "caterpillar" in fname or "kale" in fname or "worm" in fname:
+    elif any(k in all_hint for k in ["คะน้า", "กะหล่ำ", "kale", "cabbage", "caterpillar", "worm"]):
         selected_disease_id = "brassica_caterpillar"
-    elif "white" in fname or "rust" in fname:
-        selected_disease_id = "morning_glory_white_rust"
-    elif "healthy" in fname or "normal" in fname:
-        selected_disease_id = "universal_healthy"
 
-    # ถ้าไม่มี hint ให้ใช้อัลกอริทึม Computer Vision วิเคราะห์คุณลักษณะภาพสากล
+    # หากไม่มี hint หรือเลือก "ตรวจจับอัตโนมัติ" ให้ใช้อัลกอริทึม Computer Vision จำแนกคุณลักษณะ
     if not selected_disease_id:
-        if brown_ratio > 0.03 and green_ratio > 0.30:
-            # พืชใบเขียวมีจุดแผลสีน้ำตาลหรือขอบใบไหม้ (เช่น ผักสลัด / โรคใบจุด)
+        # 1. พืชใบเขียวสดที่มีรอยจุดแผลไหม้สีน้ำตาลหรือขอบใบไหม้ (ลักษณะเฉพาะของผักสลัด/ผักใบเขียว)
+        if green_ratio > 0.30 and brown_ratio > 0.025:
             selected_disease_id = "lettuce_leaf_spot"
-        elif brown_ratio > 0.08 or dark_ratio > 0.12:
-            # จุดแผลสีน้ำตาลไหม้กระจายตัวสูง -> โรคกลุ่มแอนแทรคโนสหรือใบไหม้สากล
+        # 2. จุดแผลสีน้ำตาลไหม้เข้มกระจายตัวกว้าง -> โรคกลุ่มแอนแทรคโนสสากล
+        elif brown_ratio > 0.09 or dark_ratio > 0.12:
             selected_disease_id = "universal_anthracnose"
+        # 3. คราบขาวแป้งหรือผงสปอร์ -> โรคราแป้งสากล
         elif white_ratio > 0.08:
-            # มีคราบขาวหรือผงแป้ง -> โรคกลุ่มราแป้งและราน้ำค้างสากล
             selected_disease_id = "universal_powdery_mildew"
-        elif yellow_ratio > 0.15:
-            # ใบเหลืองเป็นหย่อมๆ ซีด -> ใบหงิก/ขาดธาตุอาหาร
-            selected_disease_id = "chili_leaf_curl" if brown_ratio < 0.04 else "universal_fungal_spot"
-        elif dark_ratio > 0.06 and green_ratio > 0.4:
-            # มีรูพรุน รอยกัดแหว่ง -> หนอนกัดกินใบ
+        # 4. พืชตระกูลแตง (มีรอยเหลืองเหลี่ยมและไหม้รุนแรงมาก)
+        elif yellow_ratio > 0.22 and brown_ratio > 0.08:
+            selected_disease_id = "cucumber_downy_mildew"
+        # 5. ใบซีดเหลืองด่าง หงิกงอ
+        elif yellow_ratio > 0.14:
+            selected_disease_id = "chili_leaf_curl"
+        # 6. รูพรุนรอยแมลงกัดกิน
+        elif dark_ratio > 0.06 and green_ratio > 0.40:
             selected_disease_id = "brassica_caterpillar"
-        elif green_ratio > 0.45 and yellow_ratio < 0.06 and brown_ratio < 0.03:
-            # พื้นที่สีเขียวสดใสสูงมาก ไม่มีจุดไหม้ -> พืชปกติสมบูรณ์
+        # 7. ใบเขียวสมบูรณ์ ไร้รอยโรค
+        elif green_ratio > 0.45 and yellow_ratio < 0.08 and brown_ratio < 0.03:
             selected_disease_id = "universal_healthy"
         else:
-            # ความผิดปกติทั่วไป หรือขาดธาตุอาหาร
-            selected_disease_id = "universal_fungal_spot"
+            selected_disease_id = "lettuce_leaf_spot" if green_ratio > 0.35 else "universal_fungal_spot"
 
     disease_info = get_disease_by_id(selected_disease_id)
 
-    # คำนวณความมั่นใจ (Confidence Score) ตามความชัดเจนของคุณลักษณะ
+    # คำนวณความมั่นใจ (Confidence Score)
     base_conf = disease_info.get("confidence_default", 92.0)
-    # เพิ่มความผันแปรเล็กน้อยตามสัดส่วนสีจริง
     calculated_conf = min(98.5, max(85.0, base_conf + (green_ratio if disease_info["status"] == "normal" else brown_ratio + yellow_ratio) * 10))
 
     plant_name_th = disease_info["plant_types"][0] if disease_info.get("plant_types") else "พืชผัก"
@@ -301,57 +371,56 @@ def analyze_with_expert_rules(image: Image.Image, filename_hint: str = "") -> di
         "chemical_treatment": disease_info["chemical_treatment"],
         "prevention": disease_info["prevention"],
         "edibility": disease_info["edibility"],
-        "engine": "offline_expert",
+        "engine": "local_expert",
         "model_used": "Local Agricultural Expert Vision Engine (ออฟไลน์)",
         "search_query": search_q,
         "search_url": search_u,
         "visual_metrics": {
-            "green_ratio_pct": round(green_ratio * 100, 1),
-            "yellow_ratio_pct": round(yellow_ratio * 100, 1),
-            "brown_ratio_pct": round(brown_ratio * 100, 1),
-            "white_ratio_pct": round(white_ratio * 100, 1)
+            "green_ratio_pct": round(float(green_ratio) * 100, 1),
+            "yellow_ratio_pct": round(float(yellow_ratio) * 100, 1),
+            "brown_ratio_pct": round(float(brown_ratio) * 100, 1),
+            "white_ratio_pct": round(float(white_ratio) * 100, 1)
         }
     }
 
     return result
 
 
-def analyze_vegetable_image(image_bytes: bytes, api_key: str = None, filename_hint: str = "") -> dict:
+def analyze_vegetable_image(image_bytes: bytes, api_key: str = None, filename_hint: str = "", plant_hint: str = "") -> dict:
     """
     ฟังก์ชันหลักในการวิเคราะห์ภาพผัก
-    1. ลองเรียกใช้ Gemini 2.5 Flash Vision หากเชื่อมต่อได้และมี API Key
-    2. หากต่อเน็ตไม่ได้ หรือไม่มี Key จะสลับมาใช้ Local Expert Rule-based Engine ทันทีอย่างราบรื่น
+    1. พยายามดึง Gemini API Key (จากพารามิเตอร์, Streamlit Secrets, Session, หรือ Cache)
+    2. ถ้ามีคีย์ ให้เรียกใช้ Gemini 2.5 Flash Vision AI
+    3. หากไม่มีคีย์ หรือต่อเน็ตไม่ได้ จะสลับมาใช้ Local Expert Rule-based Engine อย่างราบรื่น
     """
     image = Image.open(io.BytesIO(image_bytes))
 
-    # ตรวจสอบขนาดและหมุนภาพตาม EXIF (ถ้ามี)
     try:
         from PIL import ImageOps
         image = ImageOps.exif_transpose(image)
     except Exception:
         pass
 
-    # พยายามใช้ Gemini ก่อน (ถ้ามี key หรือมี environment key)
-    key_to_use = (api_key or DEFAULT_API_KEY).strip()
+    key_to_use = get_effective_api_key(api_key)
+
     if key_to_use:
         try:
-            return analyze_with_gemini(image, key_to_use)
+            return analyze_with_gemini(image, key_to_use, plant_hint=plant_hint)
         except Exception as e:
             error_str = str(e)
-            result = analyze_with_expert_rules(image, filename_hint)
+            result = analyze_with_expert_rules(image, filename_hint, plant_hint)
             
             if "401" in error_str or "UNAUTHENTICATED" in error_str or "API key not valid" in error_str:
-                result["api_notice"] = "🔑 แจ้งเตือน API Key: คีย์ Gemini API ปัจจุบันไม่ถูกต้องหรือหมดอายุ (401) ระบบจึงสลับมาใช้ 'Local Expert Vision Engine' ให้แทน คุณสามารถรับคีย์ฟรีและใส่ใหม่ได้ที่ปุ่มตั้งค่า ⚙️"
+                result["api_notice"] = "🔑 แจ้งเตือน API Key: คีย์ Gemini API ปัจจุบันไม่ถูกต้องหรือหมดอายุ (401) ระบบจึงสลับมาใช้ 'Local Expert Vision Engine' ให้แทน คุณสามารถใส่คีย์ที่ถูกต้องได้ที่เมนูตั้งค่า ⚙️"
             elif "429" in error_str or "RESOURCE_EXHAUSTED" in error_str or "quota" in error_str.lower():
                 result["api_notice"] = "⏳ แจ้งเตือนโควต้า: โควต้าการเรียกใช้ Gemini เต็มชั่วคราว (429) ระบบจึงสลับมาใช้ 'Local Expert Vision Engine' ให้โดยอัตโนมัติ"
             elif "getaddrinfo" in error_str or "ConnectError" in error_str or "timeout" in error_str.lower():
                 result["api_notice"] = "🌐 แจ้งเตือนเครือข่าย: ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ Gemini ได้ ระบบจึงทำงานในโหมด 'Local Expert Vision Engine' (ออฟไลน์) ให้โดยอัตโนมัติ"
             else:
-                result["api_notice"] = f"หมายเหตุ: ไม่สามารถเรียกใช้ Gemini Vision ได้ ระบบจึงสลับมาใช้ 'Local Expert Vision Engine' แทน"
+                result["api_notice"] = f"หมายเหตุ: ไม่สามารถเรียกใช้ Gemini Vision ได้ ({error_str[:60]}) ระบบจึงสลับมาใช้ 'Local Expert Vision Engine' แทน"
             
             return result
     else:
-        # ไม่มี Key ให้ใช้ Local Expert Rule-based Engine
-        result = analyze_with_expert_rules(image, filename_hint)
-        result["api_notice"] = "🌱 ทำงานในโหมด 'Local Agricultural Expert Engine' (หากต้องการใช้ Gemini 2.5 Flash เพิ่มเติม สามารถใส่ API Key ฟรีจาก Google AI Studio ได้ที่เมนูตั้งค่า ⚙️)"
+        result = analyze_with_expert_rules(image, filename_hint, plant_hint)
+        result["api_notice"] = "🌱 ทำงานในโหมด 'Local Agricultural Expert Engine' (หากต้องการใช้ Gemini 2.5 Flash เพิ่มเติม สามารถใส่ API Key ได้ที่เมนูตั้งค่า ⚙️ หรือตั้งค่าใน Streamlit Secrets)"
         return result

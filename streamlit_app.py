@@ -15,7 +15,12 @@ app_dir = os.path.dirname(os.path.abspath(__file__))
 if app_dir not in sys.path:
     sys.path.insert(0, app_dir)
 
-from ai_analyzer import analyze_vegetable_image, DEFAULT_API_KEY
+from ai_analyzer import (
+    analyze_vegetable_image, 
+    get_effective_api_key, 
+    save_cached_api_key,
+    DEFAULT_API_KEY
+)
 from disease_database import list_all_diseases, get_disease_by_id
 
 # 1. ตั้งค่าหน้าเว็บ Streamlit
@@ -73,34 +78,103 @@ st.markdown("""
         padding: 0.75rem 1rem;
         text-align: center;
     }
+    .engine-badge-gemini {
+        background-color: #e0f2fe;
+        color: #0369a1;
+        padding: 0.4rem 0.8rem;
+        border-radius: 6px;
+        font-weight: 500;
+        display: inline-block;
+        margin-bottom: 0.5rem;
+    }
+    .engine-badge-local {
+        background-color: #fef3c7;
+        color: #92400e;
+        padding: 0.4rem 0.8rem;
+        border-radius: 6px;
+        font-weight: 500;
+        display: inline-block;
+        margin-bottom: 0.5rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
+# ตรวจสอบคีย์จาก URL query params (ป้องกันคีย์หายเวลารีเฟรช)
+if "key" in st.query_params and not st.session_state.get("api_key"):
+    q_k = st.query_params.get("key", "").strip()
+    if q_k.startswith("AIza"):
+        st.session_state["api_key"] = q_k
+
+current_active_key = get_effective_api_key(st.session_state.get("api_key"))
+
 # 2. แถบด้านข้าง (Sidebar)
 with st.sidebar:
-    st.image("static/icons/icon-192.png" if os.path.exists(os.path.join(app_dir, "static/icons/icon-192.png")) else "🥬", width=80)
+    st.image("static/icons/icon-192.png" if os.path.exists(os.path.join(app_dir, "static/icons/icon-192.png")) else "🥬", width=75)
     st.markdown("## 🥬 VegCare AI")
     st.caption("ระบบวิเคราะห์สุขภาพพืช ผักสวนครัว และทุเรียน")
     
     st.divider()
-    st.markdown("### ⚙️ การตั้งค่า API Key")
-    user_api_key = st.text_input(
-        "Google Gemini API Key (อุปกรณ์เสริม)",
-        type="password",
-        value=st.session_state.get("api_key", ""),
-        help="รับ API Key ฟรีได้จาก https://aistudio.google.com/ หากไม่ใส่ ระบบจะใช้โหมด Local Expert Engine ออฟไลน์ให้แทน"
-    )
-    if user_api_key:
-        st.session_state["api_key"] = user_api_key
-        st.success("บันทึก API Key เรียบร้อย")
+    st.markdown("### ⚙️ การตั้งค่า AI Vision (Gemini)")
+    
+    if current_active_key:
+        masked_k = current_active_key[:7] + "..." + current_active_key[-4:]
+        st.success(f"🟢 **เชื่อมต่อ Gemini 2.5 Flash สำเร็จ**\n\n(`{masked_k}`)\n\nพร้อมวิเคราะห์พืช ผัก ผลไม้ทุกชนิดในโลกอย่างแม่นยำ")
+        
+        with st.expander("🛠️ เปลี่ยนหรือล้าง API Key"):
+            if st.button("ลบ API Key ที่บันทึกไว้", type="secondary", use_container_width=True):
+                if "api_key" in st.session_state:
+                    del st.session_state["api_key"]
+                if "key" in st.query_params:
+                    del st.query_params["key"]
+                cache_p = os.path.join(app_dir, ".api_key_cache")
+                if os.path.exists(cache_p):
+                    try:
+                        os.remove(cache_p)
+                    except Exception:
+                        pass
+                st.rerun()
+    else:
+        st.warning("⚠️ **ยังไม่ได้เชื่อมต่อ Gemini API Key**\n\nระบบจะทำงานในโหมด **Local Expert Vision Engine (ออฟไลน์)**")
+        
+        input_key = st.text_input(
+            "ใส่ Google Gemini API Key:",
+            type="password",
+            value="",
+            placeholder="AIzaSy...",
+            help="รับ API Key ฟรีได้จาก https://aistudio.google.com/ คีย์จะขึ้นต้นด้วย AIzaSy..."
+        )
+        
+        if st.button("💾 บันทึก API Key", type="primary", use_container_width=True):
+            clean_k = input_key.strip().strip("'\"")
+            if clean_k.startswith("AIza"):
+                st.session_state["api_key"] = clean_k
+                st.query_params["key"] = clean_k
+                save_cached_api_key(clean_k)
+                st.success("✅ บันทึก API Key สำเร็จ!")
+                st.rerun()
+            else:
+                st.error("❌ รูปแบบคีย์ไม่ถูกต้อง! Google AI Studio API Key ต้องขึ้นต้นด้วย 'AIza...'")
+
+        with st.expander("📌 วิธีบันทึกคีย์ถาวรบน Streamlit Cloud"):
+            st.markdown("""
+            ไม่ต้องคอยพิมพ์คีย์ใหม่ทุกครั้ง:
+            1. กดปุ่ม **`Manage app`** ที่มุมขวาล่างของหน้าจอ
+            2. กดจุด 3 จุด **`⋮`** -> เลือก **`Settings`**
+            3. เลือกแถบ **`Secrets`** ทางซ้าย
+            4. วางข้อความนี้ลงไป (แทนที่ด้วยคีย์ของคุณ):
+            ```toml
+            GEMINI_API_KEY = "AIzaSy..."
+            ```
+            5. กด **Save** -> คีย์จะถูกบันทึกถาวรตลอดไป!
+            """)
 
     st.divider()
     st.markdown("### 💡 เกี่ยวกับระบบ")
     st.info(
         "รองรับการตรวจโรคพืช ผักสวนครัว และทุเรียน เช่น โรครากเน่าโคนเน่ายางไหล, "
-        "โรคใบติด, ใบไหม้มะเขือเทศ, พริกใบหงิก, ราน้ำค้างแตงกวา, หนอนใยผัก และอาการขาดธาตุอาหาร"
+        "โรคใบติด, ใบไหม้มะเขือเทศ, พริกใบหงิก, ราน้ำค้างแตงกวา, หนอนใยผัก และผักสลัดใบจุด/ขอบใบไหม้"
     )
-    st.markdown("[📖 รับ API Key ฟรีที่ Google AI Studio](https://aistudio.google.com/app/apikey)")
+    st.markdown("[🔗 รับ Gemini API Key ฟรีที่ Google AI Studio](https://aistudio.google.com/app/apikey)")
 
 # 3. ส่วนหัวของหน้าเว็บหลัก
 st.markdown('<div class="main-title">🌍 VegCare AI (ผู้ช่วยตรวจโรคผัก ผลไม้ และพืชทุกชนิดในโลก)</div>', unsafe_allow_html=True)
@@ -118,7 +192,15 @@ def display_diagnosis_report(result):
     """ฟังก์ชันแสดงผลลัพธ์การวินิจฉัยและแนวทางการรักษา"""
     is_normal = result.get("is_normal", False)
     status = result.get("health_status", "warning")
+    model_used = result.get("model_used", "AI Engine")
+    engine = result.get("engine", "local_expert")
     
+    # ป้ายแสดง Engine
+    if engine == "gemini_vision":
+        st.markdown(f'<div class="engine-badge-gemini">✨ วิเคราะห์ด้วย: <strong>{model_used}</strong> (AI Vision แม่นยำระดับโลก)</div>', unsafe_allow_html=True)
+    else:
+        st.markdown(f'<div class="engine-badge-local">🌱 วิเคราะห์ด้วย: <strong>{model_used}</strong></div>', unsafe_allow_html=True)
+
     # 1. แถบสถานะหลัก
     if is_normal:
         st.markdown(f"""
@@ -221,12 +303,31 @@ def display_diagnosis_report(result):
 # TAB 1: ตรวจสุขภาพพืช/ทุเรียน (Scan)
 # ==============================================================
 with tab_scan:
-    st.markdown("### เลือกวิธีส่งรูปภาพ")
-    input_method = st.radio(
-        "ช่องทางการนำเข้ารูปภาพ:",
-        ["📷 ถ่ายภาพด้วยกล้อง (Camera)", "📁 อัปโหลดไฟล์ภาพ (Upload File)"],
-        horizontal=True
-    )
+    col_input_left, col_input_right = st.columns([1, 1])
+    
+    with col_input_left:
+        input_method = st.radio(
+            "ช่องทางการนำเข้ารูปภาพ:",
+            ["📁 อัปโหลดไฟล์ภาพ (Upload File)", "📷 ถ่ายภาพด้วยกล้อง (Camera)"],
+            horizontal=True
+        )
+
+    with col_input_right:
+        plant_hint = st.selectbox(
+            "🌱 ชนิดพืช (ตัวเลือกช่วยเพิ่มความแม่นยำ):",
+            [
+                "🤖 ให้ AI ตรวจจับอัตโนมัติ (ครอบคลุมพืชทุกชนิดในโลก)",
+                "🥬 ผักสลัด / ผักใบเขียว (บัตเตอร์เฮด, กรีนโอ๊ค, คอส, ผักกาดหอม)",
+                "🍈 ทุเรียน (รากเน่าโคนเน่า, ใบติด, แอนแทรคโนส, เพลี้ย)",
+                "🍅 มะเขือเทศ / มะเขือ",
+                "🌶️ พริก (ใบหงิกเหลือง, แอนแทรคโนส)",
+                "🥒 แตงกวา / บวบ / เมล่อน / ฟักทอง",
+                "🥦 กะหล่ำปลี / คะน้า / บรอกโคลี",
+                "🍋 ส้ม / มะนาว / พืชตระกูลส้ม",
+                "🥭 มะม่วง / ไม้ผลเมืองร้อน",
+                "🌿 พืชสวนครัวอื่นๆ"
+            ]
+        )
 
     image_bytes = None
     file_hint = ""
@@ -254,8 +355,13 @@ with tab_scan:
         with col_diag:
             if run_btn:
                 with st.spinner("AI กำลังวิเคราะห์สุขภาพพืชและตรวจหารอยโรค..."):
-                    api_key = st.session_state.get("api_key") or DEFAULT_API_KEY
-                    result = analyze_vegetable_image(image_bytes, api_key=api_key, filename_hint=file_hint)
+                    api_key = get_effective_api_key(st.session_state.get("api_key"))
+                    result = analyze_vegetable_image(
+                        image_bytes, 
+                        api_key=api_key, 
+                        filename_hint=file_hint,
+                        plant_hint=plant_hint
+                    )
                     display_diagnosis_report(result)
 
 
@@ -266,13 +372,13 @@ with tab_samples:
     st.markdown("### คลิกเลือกภาพตัวอย่างเพื่อทดสอบระบบทันที")
     
     samples_data = [
-        {"file": "durian_phytophthora.png", "title": "ทุเรียน: โรครากเน่าโคนเน่า ยางไหล", "desc": "เชื้อรา Phytophthora palmivora"},
-        {"file": "durian_healthy.png", "title": "ทุเรียน: ใบทุเรียนสมบูรณ์", "desc": "เขียวเข้มเป็นมันวาว ไร้โรค"},
-        {"file": "tomato_blight.png", "title": "มะเขือเทศ: โรคใบไหม้", "desc": "เชื้อรา Alternaria solani (Early Blight)"},
-        {"file": "chili_leaf_curl.png", "title": "พริก: โรคใบหงิกเหลือง", "desc": "ไวรัสใบหงิกและแมลงพาหะ"},
-        {"file": "cucumber_downy_mildew.png", "title": "แตงกวา: โรคราน้ำค้าง", "desc": "แผลจุดเหลี่ยมตามเส้นใบ"},
-        {"file": "kale_caterpillar.png", "title": "คะน้า: หนอนใยผักกัดกินใบ", "desc": "แผลรูพรุนและรอยกัดแทะ"},
-        {"file": "cabbage_healthy.png", "title": "ผักกาดขาว: ผักสมบูรณ์", "desc": "สุขภาพดี แข็งแรง ไร้โรค"}
+        {"file": "durian_phytophthora.png", "title": "ทุเรียน: โรครากเน่าโคนเน่า ยางไหล", "desc": "เชื้อรา Phytophthora palmivora", "hint": "ทุเรียน"},
+        {"file": "durian_healthy.png", "title": "ทุเรียน: ใบทุเรียนสมบูรณ์", "desc": "เขียวเข้มเป็นมันวาว ไร้โรค", "hint": "ทุเรียน"},
+        {"file": "tomato_blight.png", "title": "มะเขือเทศ: โรคใบไหม้", "desc": "เชื้อรา Alternaria solani (Early Blight)", "hint": "มะเขือเทศ"},
+        {"file": "chili_leaf_curl.png", "title": "พริก: โรคใบหงิกเหลือง", "desc": "ไวรัสใบหงิกและแมลงพาหะ", "hint": "พริก"},
+        {"file": "cucumber_downy_mildew.png", "title": "แตงกวา: โรคราน้ำค้าง", "desc": "แผลจุดเหลี่ยมตามเส้นใบ", "hint": "แตงกวา"},
+        {"file": "kale_caterpillar.png", "title": "คะน้า: หนอนใยผักกัดกินใบ", "desc": "แผลรูพรุนและรอยกัดแทะ", "hint": "คะน้า"},
+        {"file": "cabbage_healthy.png", "title": "ผักกาดขาว: ผักสมบูรณ์", "desc": "สุขภาพดี แข็งแรง ไร้โรค", "hint": "ผักกาดขาว"}
     ]
 
     selected_sample = st.selectbox(
@@ -290,8 +396,13 @@ with tab_samples:
                 st.image(sample_bytes, caption=selected_sample["title"], use_container_width=True)
                 if st.button("🔬 วินิจฉัยตัวอย่างนี้", key="btn_sample", type="primary", use_container_width=True):
                     with st.spinner("กำลังวิเคราะห์..."):
-                        api_key = st.session_state.get("api_key") or DEFAULT_API_KEY
-                        result = analyze_vegetable_image(sample_bytes, api_key=api_key, filename_hint=selected_sample["file"])
+                        api_key = get_effective_api_key(st.session_state.get("api_key"))
+                        result = analyze_vegetable_image(
+                            sample_bytes, 
+                            api_key=api_key, 
+                            filename_hint=selected_sample["file"],
+                            plant_hint=selected_sample.get("hint", "")
+                        )
                         with col_s2:
                             display_diagnosis_report(result)
 
@@ -301,7 +412,7 @@ with tab_samples:
 # ==============================================================
 with tab_encyclopedia:
     st.markdown("### คลังข้อมูลโรคพืช ผักสวนครัว และทุเรียน")
-    search_q = st.text_input("🔍 ค้นหาตามชื่อโรค หรือชื่อพืช (เช่น ทุเรียน, มะเขือเทศ, ไฟทอปธอร่า, เพลี้ย):")
+    search_q = st.text_input("🔍 ค้นหาตามชื่อโรค หรือชื่อพืช (เช่น ทุเรียน, ผักสลัด, มะเขือเทศ, ไฟทอปธอร่า, เพลี้ย):")
 
     all_diseases = list_all_diseases()
     if search_q:
