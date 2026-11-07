@@ -7,9 +7,10 @@ echo       VegCare AI - ระบบวิเคราะห์โรคพื�
 echo ======================================================================
 echo.
 echo  กำลังเปิดแอปพลิเคชัน Streamlit...
-echo  - เปิดบนเบราว์เซอร์: http://localhost:8501
+echo  - เปิดบนคอมพิวเตอร์: http://localhost:8501
+echo  - เปิดบนมือถือ (Wi-Fi เดียวกัน): http://192.168.1.54:8501
 echo.
 
-python -m streamlit run streamlit_app.py
+python -m streamlit run streamlit_app.py --server.address 0.0.0.0 --server.port 8501
 
 pause
