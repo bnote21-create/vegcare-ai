@@ -276,9 +276,14 @@ def analyze_with_expert_rules(image: Image.Image, filename_hint: str = "") -> di
     # เพิ่มความผันแปรเล็กน้อยตามสัดส่วนสีจริง
     calculated_conf = min(98.5, max(85.0, base_conf + (green_ratio if disease_info["status"] == "normal" else brown_ratio + yellow_ratio) * 10))
 
+    plant_name_th = disease_info["plant_types"][0] if disease_info.get("plant_types") else "พืชผัก"
+    disease_name = disease_info.get("name_th", "โรคพืช")
+    search_q = f"วิธีรักษา {disease_name} ใน {plant_name_th} กรมวิชาการเกษตร"
+    search_u = "https://www.google.com/search?q=" + urllib.parse.quote(search_q)
+
     result = {
         "is_plant_or_vegetable": True,
-        "plant_name": disease_info["plant_types"][0],
+        "plant_name": plant_name_th,
         "plant_name_en": disease_info["name_en"].split("(")[0].strip(),
         "part_analyzed": "ใบ / ส่วนยอด",
         "is_normal": disease_info["status"] == "normal",
@@ -298,8 +303,8 @@ def analyze_with_expert_rules(image: Image.Image, filename_hint: str = "") -> di
         "edibility": disease_info["edibility"],
         "engine": "offline_expert",
         "model_used": "Local Agricultural Expert Vision Engine (ออฟไลน์)",
-        "search_query": f"วิธีรักษา {disease_info['name_th']} ใน {disease_info['plant_types'][0]} กรมวิชาการเกษตร",
-        "search_url": f"https://www.google.com/search?q={urllib.parse.quote(f'วิธีรักษา {disease_info[\"name_th\"]} ใน {disease_info[\"plant_types\"][0]} กรมวิชาการเกษตร')}",
+        "search_query": search_q,
+        "search_url": search_u,
         "visual_metrics": {
             "green_ratio_pct": round(green_ratio * 100, 1),
             "yellow_ratio_pct": round(yellow_ratio * 100, 1),
