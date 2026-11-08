@@ -129,22 +129,7 @@ with st.sidebar:
         st.error("⚠️ **รูปแบบใน Secrets ไม่ถูกต้อง:**\n\nใน Streamlit Cloud Secrets ค่าของคีย์ต้องใส่เครื่องหมายคำพูดคร่อมเสมอ เช่น:\n`GEMINI_API_KEY = \"AQ.Ab8...\"`\n(ห้ามลืมเครื่องหมาย `\" \"`)")
 
     if current_active_key:
-        masked_k = current_active_key[:8] + "..." + current_active_key[-5:]
-        st.success(f"🟢 **เชื่อมต่อ Gemini 2.5 Flash สำเร็จ**\n\n(`{masked_k}`)\n\nพร้อมวิเคราะห์พืช ผัก ผลไม้ทุกชนิดในโลกอย่างแม่นยำ")
-        
-        with st.expander("🛠️ เปลี่ยนหรือล้าง API Key"):
-            if st.button("ลบ API Key ที่บันทึกไว้", type="secondary", use_container_width=True):
-                if "api_key" in st.session_state:
-                    del st.session_state["api_key"]
-                if "key" in st.query_params:
-                    del st.query_params["key"]
-                cache_p = os.path.join(app_dir, ".api_key_cache")
-                if os.path.exists(cache_p):
-                    try:
-                        os.remove(cache_p)
-                    except Exception:
-                        pass
-                st.rerun()
+        st.success("🟢 **เชื่อมต่อ Gemini 2.5 Flash สำเร็จ**\n\nพร้อมวิเคราะห์พืช ผัก ผลไม้ทุกชนิดในโลกอย่างแม่นยำ")
     else:
         st.warning("⚠️ **ยังไม่ได้เชื่อมต่อ Gemini API Key**\n\nระบบจะทำงานในโหมด **Local Expert Vision Engine (ออฟไลน์)**")
         
