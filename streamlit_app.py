@@ -176,7 +176,6 @@ with st.sidebar:
         "รองรับการตรวจโรคพืช ผักสวนครัว และทุเรียน เช่น โรครากเน่าโคนเน่ายางไหล, "
         "โรคใบติด, ใบไหม้มะเขือเทศ, พริกใบหงิก, ราน้ำค้างแตงกวา, หนอนใยผัก และผักสลัดใบจุด/ขอบใบไหม้"
     )
-    st.markdown("[🔗 รับ Gemini API Key ฟรีที่ Google AI Studio](https://aistudio.google.com/app/apikey)")
 
 # 3. ส่วนหัวของหน้าเว็บหลัก
 st.markdown('<div class="main-title">🌍 VegCare AI (ผู้ช่วยตรวจโรคผัก ผลไม้ และพืชทุกชนิดในโลก)</div>', unsafe_allow_html=True)
