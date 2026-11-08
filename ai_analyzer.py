@@ -32,9 +32,11 @@ def sanitize_api_key(raw_key: str) -> str:
     """
     ทำความสะอาด API key ดึงเฉพาะตัวคีย์ออกมา
     รองรับทุกรูปแบบ เช่น:
-    - GEMINI_API_KEY = "AIzaSy..."
-    - export GEMINI_API_KEY='AIzaSy...'
-    - "AIzaSy..."
+    - คีย์รุ่นใหม่ของ Google AI Studio: AQ.Ab8...
+    - คีย์รุ่นคลาสสิก: AIzaSy...
+    - GEMINI_API_KEY = "..."
+    - export GEMINI_API_KEY='...'
+    - "..."
     - มีช่องว่างหัว-ท้าย หรือมีเครื่องหมาย ;
     """
     if not raw_key or not str(raw_key).strip():
@@ -62,7 +64,7 @@ def get_effective_api_key(passed_key: str = None) -> str:
     # 1. คีย์ที่ส่งเข้ามาตรงๆ
     if passed_key and str(passed_key).strip():
         k = sanitize_api_key(passed_key)
-        if len(k) >= 20 and not k.startswith("AQ."):
+        if len(k) >= 20:
             return k
 
     # 2 - 4. ตรวจสอบใน Streamlit
@@ -84,20 +86,20 @@ def get_effective_api_key(passed_key: str = None) -> str:
                         sec = st.secrets[secret_name]
                         if sec:
                             k = sanitize_api_key(str(sec))
-                            if len(k) >= 20 and not k.startswith("AQ."):
+                            if len(k) >= 20:
                                 return k
                 
                 # หากผู้ใช้ตั้งชื่อเป็นอย่างอื่น ให้ค้นหาทุกค่าใน st.secrets
                 for _, val in st.secrets.items():
                     if isinstance(val, str):
                         k = sanitize_api_key(val)
-                        if len(k) >= 20 and not k.startswith("AQ."):
+                        if len(k) >= 20:
                             return k
                     elif isinstance(val, dict):
                         for _, sub_val in val.items():
                             if isinstance(sub_val, str):
                                 k = sanitize_api_key(sub_val)
-                                if len(k) >= 20 and not k.startswith("AQ."):
+                                if len(k) >= 20:
                                     return k
             except Exception:
                 pass
@@ -107,7 +109,7 @@ def get_effective_api_key(passed_key: str = None) -> str:
             s_key = st.session_state.get("api_key")
             if s_key:
                 k = sanitize_api_key(str(s_key))
-                if len(k) >= 20 and not k.startswith("AQ."):
+                if len(k) >= 20:
                     return k
 
         # Query Params (เก็บใน URL เพื่อป้องกันรีเฟรชแล้วหลุด)
@@ -115,7 +117,7 @@ def get_effective_api_key(passed_key: str = None) -> str:
             q_key = st.query_params.get("key")
             if q_key:
                 k = sanitize_api_key(str(q_key))
-                if len(k) >= 20 and not k.startswith("AQ."):
+                if len(k) >= 20:
                     return k
     except Exception:
         pass
@@ -127,7 +129,7 @@ def get_effective_api_key(passed_key: str = None) -> str:
             with open(cache_path, "r", encoding="utf-8") as f:
                 c_key = f.read().strip()
                 k = sanitize_api_key(c_key)
-                if len(k) >= 20 and not k.startswith("AQ."):
+                if len(k) >= 20:
                     return k
         except Exception:
             pass
@@ -136,7 +138,7 @@ def get_effective_api_key(passed_key: str = None) -> str:
     env_key = os.environ.get("GEMINI_API_KEY", "").strip()
     if env_key:
         k = sanitize_api_key(env_key)
-        if len(k) >= 20 and not k.startswith("AQ."):
+        if len(k) >= 20:
             return k
 
     return ""
@@ -145,7 +147,7 @@ def get_effective_api_key(passed_key: str = None) -> str:
 def save_cached_api_key(api_key: str) -> bool:
     """บันทึก API Key ลงแคชไฟล์เพื่อความคงทน"""
     k = sanitize_api_key(api_key)
-    if len(k) < 20 or k.startswith("AQ."):
+    if len(k) < 20:
         return False
     try:
         cache_path = os.path.join(current_dir, ".api_key_cache")
