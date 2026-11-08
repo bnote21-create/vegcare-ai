@@ -19,6 +19,7 @@ from ai_analyzer import (
     analyze_vegetable_image, 
     get_effective_api_key, 
     save_cached_api_key,
+    sanitize_api_key,
     DEFAULT_API_KEY
 )
 from disease_database import list_all_diseases, get_disease_by_id
@@ -101,9 +102,17 @@ st.markdown("""
 
 # ตรวจสอบคีย์จาก URL query params (ป้องกันคีย์หายเวลารีเฟรช)
 if "key" in st.query_params and not st.session_state.get("api_key"):
-    q_k = st.query_params.get("key", "").strip()
-    if q_k.startswith("AIza"):
+    q_k = sanitize_api_key(st.query_params.get("key", ""))
+    if len(q_k) >= 20 and not q_k.startswith("AQ."):
         st.session_state["api_key"] = q_k
+
+# ตรวจสอบว่ามีข้อผิดพลาดเรื่อง TOML ใน Secrets หรือไม่
+secrets_toml_error = False
+try:
+    if hasattr(st, "secrets") and len(st.secrets) > 0:
+        pass
+except Exception as e:
+    secrets_toml_error = True
 
 current_active_key = get_effective_api_key(st.session_state.get("api_key"))
 
@@ -116,6 +125,9 @@ with st.sidebar:
     st.divider()
     st.markdown("### ⚙️ การตั้งค่า AI Vision (Gemini)")
     
+    if secrets_toml_error:
+        st.error("⚠️ **รูปแบบใน Secrets ไม่ถูกต้อง:**\n\nใน Streamlit Cloud Secrets ค่าของคีย์ต้องใส่เครื่องหมายคำพูดคร่อมเสมอ เช่น:\n`GEMINI_API_KEY = \"AIzaSy...\"`\n(ห้ามลืมเครื่องหมาย `\" \"`)")
+
     if current_active_key:
         masked_k = current_active_key[:7] + "..." + current_active_key[-4:]
         st.success(f"🟢 **เชื่อมต่อ Gemini 2.5 Flash สำเร็จ**\n\n(`{masked_k}`)\n\nพร้อมวิเคราะห์พืช ผัก ผลไม้ทุกชนิดในโลกอย่างแม่นยำ")
@@ -137,35 +149,42 @@ with st.sidebar:
         st.warning("⚠️ **ยังไม่ได้เชื่อมต่อ Gemini API Key**\n\nระบบจะทำงานในโหมด **Local Expert Vision Engine (ออฟไลน์)**")
         
         input_key = st.text_input(
-            "ใส่ Google Gemini API Key:",
+            "ใส่ Google Gemini API Key ที่นี่:",
             type="password",
-            value="",
+            key="sidebar_key_input",
             placeholder="AIzaSy...",
-            help="รับ API Key ฟรีได้จาก https://aistudio.google.com/ คีย์จะขึ้นต้นด้วย AIzaSy..."
+            help="วาง API Key จาก Google AI Studio แล้วกด Enter หรือคลิกปุ่มบันทึก"
         )
         
-        if st.button("💾 บันทึก API Key", type="primary", use_container_width=True):
-            clean_k = input_key.strip().strip("'\"")
-            if clean_k.startswith("AIza"):
-                st.session_state["api_key"] = clean_k
-                st.query_params["key"] = clean_k
-                save_cached_api_key(clean_k)
-                st.success("✅ บันทึก API Key สำเร็จ!")
-                st.rerun()
-            else:
-                st.error("❌ รูปแบบคีย์ไม่ถูกต้อง! Google AI Studio API Key ต้องขึ้นต้นด้วย 'AIza...'")
+        save_btn = st.button("💾 บันทึก API Key", type="primary", use_container_width=True)
+        
+        # บันทึกทันทีเมื่อกดปุ่ม หรือเมื่อมีการพิมพ์คีย์แล้วกด Enter
+        if input_key:
+            clean_k = sanitize_api_key(input_key)
+            if save_btn or (clean_k and clean_k != st.session_state.get("api_key")):
+                if len(clean_k) >= 20 and not clean_k.startswith("AQ."):
+                    st.session_state["api_key"] = clean_k
+                    st.query_params["key"] = clean_k
+                    save_cached_api_key(clean_k)
+                    st.success("✅ บันทึก API Key สำเร็จ!")
+                    st.rerun()
+                elif clean_k.startswith("AQ."):
+                    st.error("❌ คีย์ที่ขึ้นต้นด้วย 'AQ.' เป็น Token ของระบบอื่น ไม่ใช่ Google AI Studio API Key")
+                else:
+                    st.error("❌ คีย์สั้นเกินไป กรุณาตรวจสอบว่าคัดลอกมาครบถ้วน (โดยปกติจะขึ้นต้นด้วย 'AIzaSy...')")
 
-        with st.expander("📌 วิธีบันทึกคีย์ถาวรบน Streamlit Cloud"):
+        with st.expander("📌 วิธีบันทึกคีย์ถาวรบน Streamlit Cloud (ไม่ต้องกรอกซ้ำ)", expanded=True):
             st.markdown("""
-            ไม่ต้องคอยพิมพ์คีย์ใหม่ทุกครั้ง:
             1. กดปุ่ม **`Manage app`** ที่มุมขวาล่างของหน้าจอ
             2. กดจุด 3 จุด **`⋮`** -> เลือก **`Settings`**
             3. เลือกแถบ **`Secrets`** ทางซ้าย
-            4. วางข้อความนี้ลงไป (แทนที่ด้วยคีย์ของคุณ):
+            4. วางข้อความนี้ลงไป:
             ```toml
             GEMINI_API_KEY = "AIzaSy..."
             ```
-            5. กด **Save** -> คีย์จะถูกบันทึกถาวรตลอดไป!
+            > ⚠️ **สำคัญมาก:** ต้องมีเครื่องหมายคำพูด `"..."` คร่อมคีย์เสมอ หากไม่มีเครื่องหมายคำพูด ระบบคลาวด์จะไม่สามารถอ่านไฟล์ได้!
+            
+            5. กด **Save** แล้วกด **Reboot app** 1 ครั้ง คีย์จะถูกบันทึกถาวรตลอดไปครับ!
             """)
 
     st.divider()
